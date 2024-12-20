@@ -129,7 +129,7 @@ def draw_container(container_dim, boxes, container_type):
     st.write(f"**사용된 CBM:** {used_cbm:.2f} m³ / **총 CBM:** {container_cbm:.2f} m³")
     st.write(f"**CBM 사용률:** { (used_cbm / container_cbm) * 100:.2f}%")
 
-# Streamlit UI
+# Streamlit UI 설정
 st.set_page_config(page_title="혼적 컨테이너 선적 시뮬레이션", layout="wide")
 st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
 
@@ -138,7 +138,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.header("제품 정보 입력")
-    num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1)
+    num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1, key='num_products')
 
     products = []
     for i in range(int(num_products)):
@@ -164,5 +164,9 @@ with col2:
     st.write(f"**CBM:** {cbm:.2f} m³")
 
 if st.button("시뮬레이션 시작"):
-    st.subheader(f"{container_type} 컨테이너에 제품을 선적하는 시뮬레이션입니다.")
-    draw_container(container_dim, products, container_type)
+    if len(products) == 0:
+        st.warning("적어도 하나의 제품 정보를 입력해주세요.")
+    else:
+        # 시뮬레이션 실행
+        st.subheader(f"{container_type} 컨테이너에 제품을 선적하는 시뮬레이션입니다.")
+        draw_container(container_dim, products, container_type)
