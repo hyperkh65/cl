@@ -57,12 +57,18 @@ def draw_container(container_dim, boxes, container_type):
 
     # 박스 배치 초기 위치
     current_x, current_y, current_z = 0, 0, 0
-    used_cbm = 0
+    used_cbm = 0.0
     total_loaded_boxes = 0
     colors = ['blue', 'red', 'green', 'orange', 'purple']
     color_idx = 0
 
+    # 제품별 CBM 및 박스 수량 추적
+    product_cbm = {}
+    loaded_boxes_per_product = {}
+
     for i, (bx, by, bz, qty) in enumerate(boxes):
+        loaded_boxes_per_product[i] = 0
+        product_cbm[i] = 0.0
         for _ in range(qty):
             # 공간 초과 시 다음 행으로 이동
             if current_x + bx > cx:
@@ -83,6 +89,8 @@ def draw_container(container_dim, boxes, container_type):
             add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], f'Product {i+1}')
             used_cbm += (bx * by * bz) / 1e9  # mm³을 m³으로 변환
             total_loaded_boxes += 1
+            loaded_boxes_per_product[i] += 1
+            product_cbm[i] += (bx * by * bz) / 1e9  # m³
 
             # 다음 박스의 x 좌표 업데이트
             current_x += bx
@@ -90,7 +98,7 @@ def draw_container(container_dim, boxes, container_type):
 
     # 최대 선적 가능 박스 수 계산
     max_boxes = 1
-    for bx, by, bz, _ in boxes:
+    for i, (bx, by, bz, _) in enumerate(boxes):
         max_boxes *= math.floor(cx / bx) * math.floor(cy / by) * math.floor(cz / bz)
 
     # 레이아웃 설정
@@ -129,6 +137,16 @@ def draw_container(container_dim, boxes, container_type):
     st.write(f"**실제 선적된 박스 수:** {total_loaded_boxes}")
     st.write(f"**사용된 CBM:** {used_cbm:.2f} m³ / **총 CBM:** {container_cbm:.2f} m³")
     st.write(f"**CBM 사용률:** { (used_cbm / container_cbm) * 100:.2f}%")
+
+    # 제품별 상세 정보 표시
+    st.subheader("제품별 선적 정보")
+    for i, (bx, by, bz, qty) in enumerate(boxes):
+        st.write(f"**제품 {i+1}:**")
+        st.write(f" - 박스 크기: {bx} mm × {by} mm × {bz} mm")
+        st.write(f" - 카톤당 수량: {qty} 개")
+        st.write(f" - 총 발주 수량: {qty} 개")  # 카톤당 수량이 1개이므로 발주 수량과 동일
+        st.write(f" - 선적된 박스 수: {loaded_boxes_per_product[i]} 개")
+        st.write(f" - 제품별 사용된 CBM: {product_cbm[i]:.2f} m³")
 
 # Streamlit UI
 st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
