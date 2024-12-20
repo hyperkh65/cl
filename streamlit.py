@@ -4,7 +4,6 @@ import numpy as np
 import math
 from py3dbp import Packer, Bin, Item
 import pandas as pd
-from itertools import permutations
 
 # 컨테이너 정보 (단위: mm, 내부 치수)
 CONTAINERS = {
@@ -138,7 +137,6 @@ def display_results(packer, container_cbm, container_dim):
     # 총 선적 정보
     st.subheader("총 선적 정보")
     summary_data = {
-        "최대 선적 가능 박스 수": [calculate_max_boxes(packer, container_dim)],
         "실제 선적된 박스 수": [total_loaded_boxes],
         "사용된 CBM": [f"{total_used_cbm:.4f} m³"],
         "총 CBM": [f"{container_cbm:.2f} m³"],
@@ -151,13 +149,6 @@ def display_results(packer, container_cbm, container_dim):
         "CBM 사용률": "{}%"
     }))
 
-def calculate_max_boxes(packer, container_dim):
-    # 최대 선적 가능 박스 수는 패킹 알고리즘에 따라 다르므로, 패킹된 박스 수의 합을 최대 박스 수로 간주
-    max_boxes = 0
-    for bin in packer.bins:
-        max_boxes += len(bin.items)
-    return max_boxes
-
 def optimize_packing(container_dim, products):
     packer = Packer()
 
@@ -165,23 +156,52 @@ def optimize_packing(container_dim, products):
     bin = Bin('Container', container_dim['length'], container_dim['width'], container_dim['height'], max_weight=1000000)  # 무게는 임의로 설정
     packer.add_bin(bin)
 
-    # 제품을 추가
+    # 제품을 추가 (회전 비활성화)
     for i, product in enumerate(products):
         name = f"Product {i+1}"
         for _ in range(product['cartons']):
-            packer.add_item(Item(name, product['length'], product['width'], product['height'], 1))
+            packer.add_item(Item(name, product['length'], product['width'], product['height'], 1, rotate=False))
 
     # 패킹 수행
     packer.pack()
 
     return packer
 
+def volume_based_estimation(container_dim, products):
+    container_volume = (container_dim['length'] * container_dim['width'] * container_dim['height']) / 1e9  # m³
+    total_product_volume = sum((p['length'] * p['width'] * p['height'] / 1e9) * p['cartons'] for p in products)
+    cbm_usage = total_product_volume / container_volume * 100
+    return total_product_volume, cbm_usage
+
 # Streamlit UI
 st.set_page_config(page_title="컨테이너 선적 시뮬레이션", layout="wide")
 st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
 
-# 컨테이너 선택
-with st.sidebar:
+# 좌우 레이아웃 설정
+col1, col2 = st.columns(2)
+
+with col1:
+    st.header("제품 정보 입력")
+    num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=10, step=1, key='num_products')
+    
+    products = []
+    for i in range(int(num_products)):
+        with st.expander(f"제품 {i + 1} 설정", expanded=True):
+            length = st.number_input(f"제품 {i + 1} 길이 (mm)", min_value=1, key=f'length_{i}')
+            width = st.number_input(f"제품 {i + 1} 너비 (mm)", min_value=1, key=f'width_{i}')
+            height = st.number_input(f"제품 {i + 1} 높이 (mm)", min_value=1, key=f'height_{i}')
+            per_carton = st.number_input(f"제품 {i + 1} 카톤당 수량", min_value=1, key=f'per_carton_{i}')
+            order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
+            cartons = calculate_cartons(per_carton, order_qty)
+            st.write(f"**총 카톤 수:** {cartons}")
+            products.append({
+                'length': length,
+                'width': width,
+                'height': height,
+                'cartons': cartons
+            })
+
+with col2:
     st.header("컨테이너 정보")
     container_type = st.selectbox("컨테이너 사이즈 선택", list(CONTAINERS.keys()))
     container_dim = CONTAINERS[container_type]
@@ -192,32 +212,36 @@ with st.sidebar:
     st.write(f"**높이:** {container_dim['height']} mm")
     st.write(f"**총 CBM:** {cbm:.2f} m³")
 
-    st.header("제품 정보 입력")
-    num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=10, step=1, key='num_products')
-
-products = []
-for i in range(int(num_products)):
-    st.sidebar.subheader(f"제품 {i + 1} 정보")
-    with st.sidebar.expander(f"제품 {i + 1} 설정", expanded=True):
-        length = st.number_input(f"제품 {i + 1} 길이 (mm)", min_value=1, key=f'length_{i}')
-        width = st.number_input(f"제품 {i + 1} 너비 (mm)", min_value=1, key=f'width_{i}')
-        height = st.number_input(f"제품 {i + 1} 높이 (mm)", min_value=1, key=f'height_{i}')
-        per_carton = st.number_input(f"제품 {i + 1} 카톤당 수량", min_value=1, key=f'per_carton_{i}')
-        order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
-        cartons = calculate_cartons(per_carton, order_qty)
-        st.write(f"**총 카톤 수:** {cartons}")
-        products.append({
-            'length': length,
-            'width': width,
-            'height': height,
-            'cartons': cartons
-        })
-
 if st.button("시뮬레이션 시작"):
     if len(products) == 0:
         st.warning("적어도 하나의 제품 정보를 입력해주세요.")
     else:
-        st.header(f"{container_type} 컨테이너에 제품을 선적하는 시뮬레이션")
-        packer = optimize_packing(container_dim, products)
-        draw_packing(packer, container_dim, container_type)
-        display_results(packer, cbm, container_dim)
+        total_boxes = sum(p['cartons'] for p in products)
+        if total_boxes > 1000:
+            st.warning("대량의 박스는 패킹 계산에 시간이 오래 걸릴 수 있습니다.")
+            with st.spinner('패킹 계산 중...'):
+                # 간단한 배치 로직 (회전 및 재배치 없이 순차적으로 배치)
+                packer = Packer()
+
+                # 컨테이너를 추가
+                bin = Bin('Container', container_dim['length'], container_dim['width'], container_dim['height'], max_weight=1000000)
+                packer.add_bin(bin)
+
+                # 제품을 추가 (회전 비활성화)
+                for i, product in enumerate(products):
+                    name = f"Product {i+1}"
+                    for _ in range(product['cartons']):
+                        packer.add_item(Item(name, product['length'], product['width'], product['height'], 1, rotate=False))
+
+                # 패킹 수행
+                packer.pack()
+
+                draw_packing(packer, container_dim, container_type)
+                display_results(packer, cbm, container_dim)
+            st.success('패킹 계산이 완료되었습니다!')
+        else:
+            with st.spinner('패킹 계산 중...'):
+                packer = optimize_packing(container_dim, products)
+                draw_packing(packer, container_dim, container_type)
+                display_results(packer, cbm, container_dim)
+            st.success('패킹 계산이 완료되었습니다!')
