@@ -13,6 +13,9 @@ CONTAINERS = {
 def calculate_cartons(per_carton, order_qty):
     return math.ceil(order_qty / per_carton)
 
+def calculate_cbm(length, width, height, quantity):
+    return (length * width * height * quantity) / 1e6  # cm³을 m³으로 변환
+
 def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
     # 8개의 꼭짓점 정의
     vertices = np.array([
@@ -62,7 +65,10 @@ def draw_container(container_dim, boxes, container_type):
     colors = ['blue', 'red', 'green', 'orange', 'purple']
     color_idx = 0
 
-    for i, (bx, by, bz, qty) in enumerate(boxes):
+    product_report = []
+
+    for i, (bx, by, bz, qty, name) in enumerate(boxes):
+        box_count = 0
         for _ in range(qty):
             # 공간 초과 시 다음 행으로 이동
             if current_x + bx > cx:
@@ -76,16 +82,26 @@ def draw_container(container_dim, boxes, container_type):
 
             # 공간 초과 시 더 이상 배치 불가
             if current_z + bz > cz:
-                st.warning(f"⚠️ 컨테이너에 더 이상 {i+1}번째 제품을 배치할 공간이 없습니다.")
+                st.warning(f"⚠️ 컨테이너에 더 이상 {name} 제품을 배치할 공간이 없습니다.")
                 break
 
             # 박스 그리기
-            add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], f'Product {i+1}')
+            add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], name)
             used_cbm += (bx * by * bz) / 1e6  # cm³을 m³으로 변환
             total_loaded_boxes += 1
+            box_count += 1
 
             # 다음 박스의 x 좌표 업데이트
             current_x += bx
+
+        product_cbm = (bx * by * bz * box_count) / 1e6
+        product_report.append({
+            "제품명": name,
+            "선적된 박스 수": box_count,
+            "전체 제품 수": box_count,
+            "제품별 CBM": f"{product_cbm:.2f} m³"
+        })
+
         color_idx += 1
 
     # 레이아웃 설정
@@ -94,39 +110,42 @@ def draw_container(container_dim, boxes, container_type):
             xaxis_title='Length (cm)',
             yaxis_title='Width (cm)',
             zaxis_title='Height (cm)',
-            aspectmode='data'  # 축 비율을 데이터에 맞게 설정
+            aspectmode='data'
         ),
         margin=dict(r=10, l=10, b=10, t=50),
         title="컨테이너 선적 시뮬레이션"
     )
 
-    # 시뮬레이션 결과 표시
     st.plotly_chart(fig, use_container_width=True)
-    st.subheader("선적 정보")
-    st.write(f"**실제 선적된 박스 수:** {total_loaded_boxes}")
-    st.write(f"**사용된 CBM:** {used_cbm:.2f} m³ / **총 CBM:** {container_cbm:.2f} m³")
-    st.write(f"**CBM 사용률:** { (used_cbm / container_cbm) * 100:.2f}%")
+
+    # 결과 요약 출력
+    st.subheader("선적 정보 요약")
+    total_cbm_used = sum(float(report["제품별 CBM"].split()[0]) for report in product_report)
+    remaining_cbm = container_cbm - total_cbm_used
+    st.write(f"**사용된 CBM:** {total_cbm_used:.2f} m³")
+    st.write(f"**남은 CBM:** {remaining_cbm:.2f} m³")
+
+    st.table(product_report)
 
 # Streamlit UI 설정
 st.set_page_config(page_title="혼적 컨테이너 선적 시뮬레이션", layout="wide")
 st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
 
-# 사이드바에 옵션창 생성
+# 사이드바 옵션창 생성
 with st.sidebar:
     st.header("옵션 창")
 
     # 컨테이너 선택
     container_type = st.selectbox("컨테이너 사이즈 선택", list(CONTAINERS.keys()))
     container_dim = CONTAINERS[container_type]
-    cbm = (container_dim['length'] / 100) * (container_dim['width'] / 100) * (container_dim['height'] / 100)
-    st.write(f"**컨테이너 CBM:** {cbm:.2f} m³")
 
     # 제품 수량 선택
-    num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1, key='num_products')
+    num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1)
 
     products = []
     for i in range(int(num_products)):
         with st.expander(f"제품 {i + 1} 설정", expanded=True):
+            name = st.text_input(f"제품 {i + 1} 이름", f"Product {i + 1}")
             length = st.number_input(f"제품 {i + 1} 길이 (cm)", min_value=1, key=f'length_{i}')
             width = st.number_input(f"제품 {i + 1} 너비 (cm)", min_value=1, key=f'width_{i}')
             height = st.number_input(f"제품 {i + 1} 높이 (cm)", min_value=1, key=f'height_{i}')
@@ -134,7 +153,7 @@ with st.sidebar:
             order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
             cartons = calculate_cartons(per_carton, order_qty)
             st.write(f"**총 카톤 수:** {cartons}")
-            products.append((length, width, height, cartons))
+            products.append((length, width, height, cartons, name))
 
     # 시뮬레이션 버튼
     if st.button("시뮬레이션 시작"):
