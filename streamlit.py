@@ -3,9 +3,9 @@ import plotly.graph_objects as go
 import numpy as np
 import math
 
-# 컨테이너 정보 (단위: cm)
+# 컨테이너 정보 (단위: cm, 내부 치수)
 CONTAINERS = {
-    "20ft": {"length": 589.8, "width": 235.2, "height": 239.5},     # 내부 치수
+    "20ft": {"length": 589.8, "width": 235.2, "height": 239.5},
     "40ft": {"length": 1202.1, "width": 235.2, "height": 239.5},
     "40ft HC": {"length": 1202.1, "width": 235.2, "height": 269.1},
 }
@@ -45,7 +45,7 @@ def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
         showscale=False
     ))
 
-def draw_container(container_dim, boxes):
+def draw_container(container_dim, boxes, container_type):
     fig = go.Figure()
 
     # 컨테이너 치수 및 CBM 계산
@@ -90,10 +90,7 @@ def draw_container(container_dim, boxes):
 
     # 최대 선적 가능 박스 수 계산 (단순한 방법)
     # 모든 박스가 동일한 크기일 때 최대 박스 수 계산
-    # 여기서는 모든 제품을 배치할 수 있는 최대 박스 수를 단순 계산
-    max_boxes = 0
-    for bx, by, bz, _ in boxes:
-        max_boxes += math.floor(cx / bx) * math.floor(cy / by) * math.floor(cz / bz)
+    max_boxes = math.floor(cx / boxes[0][0]) * math.floor(cy / boxes[0][1]) * math.floor(cz / boxes[0][2])
 
     # 레이아웃 설정
     fig.update_layout(
@@ -117,6 +114,7 @@ def draw_container(container_dim, boxes):
              f"길이: {cx} cm, 너비: {cy} cm, 높이: {cz} cm<br>"
              f"CBM: {container_cbm:.2f} m³<br>"
              f"최대 선적 가능 박스 수: {max_boxes}<br>"
+             f"실제 선적된 박스 수: {total_loaded_boxes}<br>"
              f"사용된 CBM: {used_cbm:.2f} m³",
         showarrow=False,
         font=dict(size=12)
@@ -163,5 +161,8 @@ for i in range(int(num_products)):
     products.append((length, width, height, cartons))
 
 if st.button("시뮬레이션 시작"):
-    st.subheader(f"{container_type} 컨테이너에 제품을 선적하는 시뮬레이션입니다.")
-    draw_container(container_dim, products)
+    if len(products) == 0:
+        st.warning("적어도 하나의 제품 정보를 입력해주세요.")
+    else:
+        st.subheader(f"{container_type} 컨테이너에 제품을 선적하는 시뮬레이션입니다.")
+        draw_container(container_dim, products, container_type)
