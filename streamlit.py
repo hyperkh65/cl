@@ -1,6 +1,5 @@
 import streamlit as st
 import plotly.graph_objects as go
-import numpy as np
 
 # 컨테이너 정보
 CONTAINERS = {
@@ -15,22 +14,21 @@ def calculate_cartons(length, width, height, per_carton, order_qty):
     return cartons
 
 def draw_container(container_dim, boxes):
-    fig = go.Figure()
-
     cx, cy, cz = container_dim.values()
 
     # 컨테이너 그리기
-    fig.add_trace(go.Mesh3d(
+    fig = go.Figure()
+    fig.add_trace(go.Scatter3d(
         x=[0, cx, cx, 0, 0, cx, cx, 0],
         y=[0, 0, cy, cy, 0, 0, cy, cy],
         z=[0, 0, 0, 0, cz, cz, cz, cz],
-        color='lightgrey',
-        opacity=0.20,
+        mode='lines',
+        line=dict(color='black', width=2),
         name='Container'
     ))
 
+    # 박스 배치
     current_x, current_y, current_z = 0, 0, 0
-
     colors = ['blue', 'red', 'green', 'orange', 'purple']
     color_idx = 0
 
@@ -46,13 +44,13 @@ def draw_container(container_dim, boxes):
                 st.write(f"⚠️ 컨테이너에 더 이상 {i+1}번째 제품을 배치할 공간이 없습니다.")
                 break
 
-            # 박스 그리기
+            # 각 박스를 직육면체로 그리기
             fig.add_trace(go.Mesh3d(
                 x=[current_x, current_x+bx, current_x+bx, current_x, current_x, current_x+bx, current_x+bx, current_x],
                 y=[current_y, current_y, current_y+by, current_y+by, current_y, current_y, current_y+by, current_y+by],
                 z=[current_z, current_z, current_z, current_z, current_z+bz, current_z+bz, current_z+bz, current_z+bz],
                 color=colors[color_idx % len(colors)],
-                opacity=0.50,
+                opacity=0.7,
                 name=f'Product {i+1}'
             ))
 
@@ -65,8 +63,7 @@ def draw_container(container_dim, boxes):
             yaxis_title='Width (cm)',
             zaxis_title='Height (cm)',
         ),
-        margin=dict(r=10, l=10, b=10, t=10),
-        legend=dict(x=0, y=1)
+        margin=dict(r=10, l=10, b=10, t=10)
     )
 
     st.plotly_chart(fig)
