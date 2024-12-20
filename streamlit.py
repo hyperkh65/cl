@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go
+import numpy as np
 
 # 컨테이너 정보
 CONTAINERS = {
@@ -14,17 +15,16 @@ def calculate_cartons(length, width, height, per_carton, order_qty):
     return cartons
 
 def draw_container(container_dim, boxes):
-    fig = go.Figure()
-
     cx, cy, cz = container_dim.values()
 
     # 컨테이너 그리기
-    fig.add_trace(go.Mesh3d(
+    fig = go.Figure()
+    fig.add_trace(go.Scatter3d(
         x=[0, cx, cx, 0, 0, cx, cx, 0],
         y=[0, 0, cy, cy, 0, 0, cy, cy],
         z=[0, 0, 0, 0, cz, cz, cz, cz],
-        color='lightgrey',
-        opacity=0.1,
+        mode='lines',
+        line=dict(color='black', width=5),
         name='Container'
     ))
 
@@ -35,6 +35,7 @@ def draw_container(container_dim, boxes):
 
     for i, (bx, by, bz, qty) in enumerate(boxes):
         for _ in range(qty):
+            # 컨테이너의 공간을 초과하면 좌표 초기화
             if current_x + bx > cx:
                 current_x = 0
                 current_y += by
@@ -45,17 +46,24 @@ def draw_container(container_dim, boxes):
                 st.write(f"⚠️ 컨테이너에 더 이상 {i+1}번째 제품을 배치할 공간이 없습니다.")
                 break
 
-            # 각 박스를 직육면체로 그리기
+            # 박스 꼭짓점 좌표 계산
+            x = [current_x, current_x + bx, current_x + bx, current_x, current_x, current_x + bx, current_x + bx, current_x]
+            y = [current_y, current_y, current_y + by, current_y + by, current_y, current_y, current_y + by, current_y + by]
+            z = [current_z, current_z, current_z, current_z, current_z + bz, current_z + bz, current_z + bz, current_z + bz]
+
+            # 박스 그리기
             fig.add_trace(go.Mesh3d(
-                x=[current_x, current_x + bx, current_x + bx, current_x, current_x, current_x + bx, current_x + bx, current_x],
-                y=[current_y, current_y, current_y + by, current_y + by, current_y, current_y, current_y + by, current_y + by],
-                z=[current_z, current_z, current_z, current_z, current_z + bz, current_z + bz, current_z + bz, current_z + bz],
+                x=x,
+                y=y,
+                z=z,
                 color=colors[color_idx % len(colors)],
-                opacity=0.7,
+                opacity=0.5,
                 name=f'Product {i+1}'
             ))
 
+            # 다음 박스의 x 좌표 업데이트
             current_x += bx
+
         color_idx += 1
 
     fig.update_layout(
