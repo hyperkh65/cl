@@ -14,16 +14,17 @@ def calculate_cartons(length, width, height, per_carton, order_qty):
     return cartons
 
 def draw_container(container_dim, boxes):
+    fig = go.Figure()
+
     cx, cy, cz = container_dim.values()
 
     # 컨테이너 그리기
-    fig = go.Figure()
-    fig.add_trace(go.Scatter3d(
+    fig.add_trace(go.Mesh3d(
         x=[0, cx, cx, 0, 0, cx, cx, 0],
         y=[0, 0, cy, cy, 0, 0, cy, cy],
         z=[0, 0, 0, 0, cz, cz, cz, cz],
-        mode='lines',
-        line=dict(color='black', width=2),
+        color='lightgrey',
+        opacity=0.1,
         name='Container'
     ))
 
@@ -46,9 +47,9 @@ def draw_container(container_dim, boxes):
 
             # 각 박스를 직육면체로 그리기
             fig.add_trace(go.Mesh3d(
-                x=[current_x, current_x+bx, current_x+bx, current_x, current_x, current_x+bx, current_x+bx, current_x],
-                y=[current_y, current_y, current_y+by, current_y+by, current_y, current_y, current_y+by, current_y+by],
-                z=[current_z, current_z, current_z, current_z, current_z+bz, current_z+bz, current_z+bz, current_z+bz],
+                x=[current_x, current_x + bx, current_x + bx, current_x, current_x, current_x + bx, current_x + bx, current_x],
+                y=[current_y, current_y, current_y + by, current_y + by, current_y, current_y, current_y + by, current_y + by],
+                z=[current_z, current_z, current_z, current_z, current_z + bz, current_z + bz, current_z + bz, current_z + bz],
                 color=colors[color_idx % len(colors)],
                 opacity=0.7,
                 name=f'Product {i+1}'
