@@ -2,9 +2,6 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 import math
-from io import BytesIO
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 
 # 컨테이너 정보 (단위: mm)
 CONTAINERS = {
@@ -20,11 +17,11 @@ def calculate_cbm(length, width, height, quantity):
     return (length * width * height * quantity) / 1e9  # mm³을 m³으로 변환
 
 def add_box(fig, vertices, color, name):
-    # Mesh3d를 사용하여 박스의 4면을 색칠
-    I = [0, 0, 0, 1, 1, 2, 3]
-    J = [1, 3, 4, 2, 4, 5, 7]
-    K = [3, 4, 5, 4, 5, 6, 6]
-    
+    # Mesh3d를 사용하여 박스의 4면을 색칠 (앞면, 바닥면, 뒷면, 옆면)
+    I = [0, 0, 0, 1]
+    J = [1, 3, 4, 2]
+    K = [3, 4, 5, 2]
+
     fig.add_trace(go.Mesh3d(
         x=vertices[:, 0],
         y=vertices[:, 1],
@@ -82,9 +79,8 @@ def draw_container(container_dim, boxes, container_type):
     used_cbm = 0
     total_loaded_boxes = 0
 
-    # 제품별 고유 색상 목록 (더 많은 색상을 원할 경우 확장 가능)
-    colors = ['yellow', 'cyan', 'magenta', 'lime', 'pink', 'teal', 'lavender', 'brown']
-    color_idx = 0
+    # 제품별 색상 (모두 황색으로 설정)
+    box_color = 'yellow'
 
     product_report = []
 
@@ -120,7 +116,7 @@ def draw_container(container_dim, boxes, container_type):
             ])
 
             # 박스 그리기
-            add_box(fig, box_vertices, colors[color_idx % len(colors)], name)
+            add_box(fig, box_vertices, box_color, name)
             used_cbm += calculate_cbm(bx, by, bz, 1)
             total_loaded_boxes += 1
             box_count += 1
@@ -137,8 +133,6 @@ def draw_container(container_dim, boxes, container_type):
             "전체 제품 수": total_products,
             "제품별 CBM": f"{product_cbm:.2f} m³"
         })
-
-        color_idx += 1
 
     # 레이아웃 설정
     fig.update_layout(
@@ -180,84 +174,34 @@ def draw_container(container_dim, boxes, container_type):
 
     st.table(product_report)
 
-    # PDF 생성 함수
-    def create_pdf(container_type, container_dim, product_report, total_cbm_used, remaining_cbm):
-        buffer = BytesIO()
-        pdf = canvas.Canvas(buffer, pagesize=letter)
-        pdf.setTitle("YNK 선적 시뮬레이션")
-    
-        # 타이틀
-        pdf.setFont("Helvetica-Bold", 20)
-        pdf.drawString(200, 750, "YNK 선적 시뮬레이션 보고서")
-    
-        # 컨테이너 정보
-        pdf.setFont("Helvetica", 12)
-        pdf.drawString(50, 720, f"컨테이너 타입: {container_type}")
-        pdf.drawString(50, 700, f"내부 치수: {container_dim['length']} x {container_dim['width']} x {container_dim['height']} mm")
-        pdf.drawString(50, 680, f"총 CBM: {container_cbm:.2f} m³")
-    
-        # 선적 정보 요약
-        pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawString(50, 650, "선적 정보 요약:")
-        pdf.setFont("Helvetica", 12)
-        pdf.drawString(70, 630, f"사용된 CBM: {total_cbm_used:.2f} m³")
-        pdf.drawString(70, 610, f"남은 CBM: {remaining_cbm:.2f} m³")
-        pdf.drawString(70, 590, "제품별 선적 정보:")
-        y = 570
-        for report in product_report:
-            pdf.drawString(90, y, f"- {report['제품명']}:")
-            pdf.drawString(110, y - 20, f"선적된 박스 수: {report['선적된 박스 수']}")
-            pdf.drawString(110, y - 40, f"전체 제품 수: {report['전체 제품 수']}")
-            pdf.drawString(110, y - 60, f"제품별 CBM: {report['제품별 CBM']}")
-            y -= 80
-    
-        pdf.showPage()
-        pdf.save()
-    
-        buffer.seek(0)
-        return buffer
+# Streamlit UI 설정
+st.set_page_config(page_title="혼적 컨테이너 선적 시뮬레이션", layout="wide")
+st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
 
-    # PDF 다운로드 버튼
-    if st.button("PDF로 출력"):
-        if len(product_report) == 0:
-            st.warning("시뮬레이션을 먼저 실행해주세요.")
-        else:
-            buffer = create_pdf(container_type, container_dim, product_report, total_cbm_used, remaining_cbm)
-            st.download_button(
-                label="PDF 다운로드",
-                data=buffer,
-                file_name="YNK_shipping_simulation.pdf",
-                mime="application/pdf"
-            )
+# 사이드바 옵션창 생성
+with st.sidebar:
+    st.header("옵션 창")
 
-    # Streamlit UI 설정
-    st.set_page_config(page_title="혼적 컨테이너 선적 시뮬레이션", layout="wide")
-    st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
+    # 컨테이너 선택
+    container_type = st.selectbox("컨테이너 사이즈 선택", list(CONTAINERS.keys()))
+    container_dim = CONTAINERS[container_type]
 
-    # 사이드바 옵션창 생성
-    with st.sidebar:
-        st.header("옵션 창")
+    # 제품 수량 선택
+    num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1)
 
-        # 컨테이너 선택
-        container_type = st.selectbox("컨테이너 사이즈 선택", list(CONTAINERS.keys()))
-        container_dim = CONTAINERS[container_type]
+    products = []
+    for i in range(int(num_products)):
+        with st.expander(f"제품 {i + 1} 설정", expanded=True):
+            name = st.text_input(f"제품 {i + 1} 이름", f"Product {i + 1}")
+            length = st.number_input(f"제품 {i + 1} 길이 (mm)", min_value=1, key=f'length_{i}')
+            width = st.number_input(f"제품 {i + 1} 너비 (mm)", min_value=1, key=f'width_{i}')
+            height = st.number_input(f"제품 {i + 1} 높이 (mm)", min_value=1, key=f'height_{i}')
+            per_carton = st.number_input(f"제품 {i + 1} 카톤당 수량", min_value=1, key=f'per_carton_{i}')
+            order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
+            cartons = calculate_cartons(per_carton, order_qty)
+            st.write(f"**총 카톤 수:** {cartons}")
+            products.append((length, width, height, cartons, per_carton, name))
 
-        # 제품 수량 선택
-        num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1)
-
-        products = []
-        for i in range(int(num_products)):
-            with st.expander(f"제품 {i + 1} 설정", expanded=True):
-                name = st.text_input(f"제품 {i + 1} 이름", f"Product {i + 1}")
-                length = st.number_input(f"제품 {i + 1} 길이 (mm)", min_value=1, key=f'length_{i}')
-                width = st.number_input(f"제품 {i + 1} 너비 (mm)", min_value=1, key=f'width_{i}')
-                height = st.number_input(f"제품 {i + 1} 높이 (mm)", min_value=1, key=f'height_{i}')
-                per_carton = st.number_input(f"제품 {i + 1} 카톤당 수량", min_value=1, key=f'per_carton_{i}')
-                order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
-                cartons = calculate_cartons(per_carton, order_qty)
-                st.write(f"**총 카톤 수:** {cartons}")
-                products.append((length, width, height, cartons, per_carton, name))
-
-    # 시뮬레이션 버튼
-    if st.button("시뮬레이션 시작"):
-        draw_container(container_dim, products, container_type)
+# 시뮬레이션 버튼
+if st.button("시뮬레이션 시작"):
+    draw_container(container_dim, products, container_type)
