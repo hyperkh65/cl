@@ -3,18 +3,18 @@ import plotly.graph_objects as go
 import numpy as np
 import math
 
-# 컨테이너 정보 (단위: cm)
+# 컨테이너 정보 (단위: mm)
 CONTAINERS = {
-    "20ft": {"length": 589.8, "width": 235.2, "height": 239.5},
-    "40ft": {"length": 1202.1, "width": 235.2, "height": 239.5},
-    "40ft HC": {"length": 1202.1, "width": 235.2, "height": 269.1},
+    "20ft": {"length": 5898, "width": 2352, "height": 2395},
+    "40ft": {"length": 12021, "width": 2352, "height": 2395},
+    "40ft HC": {"length": 12021, "width": 2352, "height": 2691},
 }
 
 def calculate_cartons(per_carton, order_qty):
     return math.ceil(order_qty / per_carton)
 
 def calculate_cbm(length, width, height, quantity):
-    return (length * width * height * quantity) / 1e6  # cm³을 m³으로 변환
+    return (length * width * height * quantity) / 1e9  # mm³을 m³으로 변환
 
 def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
     # 8개의 꼭짓점 정의
@@ -36,9 +36,9 @@ def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
 
     # Mesh3d로 박스 추가
     fig.add_trace(go.Mesh3d(
-        x=vertices[:,0],
-        y=vertices[:,1],
-        z=vertices[:,2],
+        x=vertices[:, 0],
+        y=vertices[:, 1],
+        z=vertices[:, 2],
         i=I,
         j=J,
         k=K,
@@ -53,7 +53,7 @@ def draw_container(container_dim, boxes, container_type):
 
     # 컨테이너 치수 및 CBM 계산
     cx, cy, cz = container_dim['length'], container_dim['width'], container_dim['height']
-    container_cbm = (cx / 100) * (cy / 100) * (cz / 100)  # CBM 계산
+    container_cbm = (cx / 1000) * (cy / 1000) * (cz / 1000)  # mm³을 m³으로 변환
 
     # 컨테이너 그리기 (투명한 회색 박스)
     add_box(fig, 0, 0, 0, cx, cy, cz, 'lightgrey', 'Container')
@@ -87,7 +87,7 @@ def draw_container(container_dim, boxes, container_type):
 
             # 박스 그리기
             add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], name)
-            used_cbm += (bx * by * bz) / 1e6  # cm³을 m³으로 변환
+            used_cbm += (bx * by * bz) / 1e9  # mm³을 m³으로 변환
             total_loaded_boxes += 1
             box_count += 1
 
@@ -95,7 +95,7 @@ def draw_container(container_dim, boxes, container_type):
             current_x += bx
 
         # 제품별 CBM 및 전체 제품 수 계산
-        product_cbm = (bx * by * bz * box_count) / 1e6
+        product_cbm = (bx * by * bz * box_count) / 1e9
         total_products = per_carton * box_count
         product_report.append({
             "제품명": name,
@@ -109,9 +109,9 @@ def draw_container(container_dim, boxes, container_type):
     # 레이아웃 설정
     fig.update_layout(
         scene=dict(
-            xaxis_title='Length (cm)',
-            yaxis_title='Width (cm)',
-            zaxis_title='Height (cm)',
+            xaxis_title='Length (mm)',
+            yaxis_title='Width (mm)',
+            zaxis_title='Height (mm)',
             aspectmode='data'
         ),
         margin=dict(r=10, l=10, b=10, t=50),
@@ -148,21 +148,15 @@ with st.sidebar:
     for i in range(int(num_products)):
         with st.expander(f"제품 {i + 1} 설정", expanded=True):
             name = st.text_input(f"제품 {i + 1} 이름", f"Product {i + 1}")
-            length = st.number_input(f"제품 {i + 1} 길이 (cm)", min_value=1, key=f'length_{i}')
-            width = st.number_input(f"제품 {i + 1} 너비 (cm)", min_value=1, key=f'width_{i}')
-            height = st.number_input(f"제품 {i + 1} 높이 (cm)", min_value=1, key=f'height_{i}')
+            length = st.number_input(f"제품 {i + 1} 길이 (mm)", min_value=1, key=f'length_{i}')
+            width = st.number_input(f"제품 {i + 1} 너비 (mm)", min_value=1, key=f'width_{i}')
+            height = st.number_input(f"제품 {i + 1} 높이 (mm)", min_value=1, key=f'height_{i}')
             per_carton = st.number_input(f"제품 {i + 1} 카톤당 수량", min_value=1, key=f'per_carton_{i}')
             order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
             cartons = calculate_cartons(per_carton, order_qty)
             st.write(f"**총 카톤 수:** {cartons}")
             products.append((length, width, height, cartons, per_carton, name))
 
-    # 시뮬레이션 버튼
-    if st.button("시뮬레이션 시작"):
-        st.session_state.start_simulation = True
-
-# 메인 화면에 시뮬레이션 결과 표시
-if 'start_simulation' in st.session_state and st.session_state.start_simulation:
-    st.subheader(f"{container_type} 컨테이너에 제품을 선적하는 시뮬레이션입니다.")
+# 시뮬레이션 버튼
+if st.button("시뮬레이션 시작"):
     draw_container(container_dim, products, container_type)
-    st.session_state.start_simulation = False
