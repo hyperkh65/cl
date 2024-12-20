@@ -14,15 +14,52 @@ def calculate_cartons(per_carton, order_qty):
     return math.ceil(order_qty / per_carton)
 
 def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
-    # 박스를 구성하는 면 추가
+    # 8개의 꼭짓점 정의
+    vertices = np.array([
+        [x0, y0, z0],
+        [x0 + dx, y0, z0],
+        [x0 + dx, y0 + dy, z0],
+        [x0, y0 + dy, z0],
+        [x0, y0, z0 + dz],
+        [x0 + dx, y0, z0 + dz],
+        [x0 + dx, y0 + dy, z0 + dz],
+        [x0, y0 + dy, z0 + dz]
+    ])
+
+    # 면을 그리기 위한 인덱스
+    I = [0, 0, 0, 1, 1, 2, 4, 4, 4, 5, 5, 6]
+    J = [1, 3, 4, 2, 3, 3, 5, 6, 7, 6, 7, 7]
+    K = [3, 4, 5, 3, 7, 7, 6, 7, 5, 7, 4, 5]
+
+    # 면 추가
     fig.add_trace(go.Mesh3d(
-        x=[x0, x0+dx, x0+dx, x0, x0, x0+dx, x0+dx, x0],
-        y=[y0, y0, y0+dy, y0+dy, y0, y0, y0+dy, y0+dy],
-        z=[z0, z0, z0, z0, z0+dz, z0+dz, z0+dz, z0+dz],
+        x=vertices[:, 0],
+        y=vertices[:, 1],
+        z=vertices[:, 2],
+        i=I,
+        j=J,
+        k=K,
         color=color,
-        opacity=0.7,
+        opacity=0.5,
         name=name
     ))
+
+    # 외곽선 추가
+    lines = [
+        [0, 1], [1, 2], [2, 3], [3, 0],  # 바닥면
+        [4, 5], [5, 6], [6, 7], [7, 4],  # 윗면
+        [0, 4], [1, 5], [2, 6], [3, 7]   # 세로선
+    ]
+
+    for line in lines:
+        fig.add_trace(go.Scatter3d(
+            x=[vertices[line[0]][0], vertices[line[1]][0]],
+            y=[vertices[line[0]][1], vertices[line[1]][1]],
+            z=[vertices[line[0]][2], vertices[line[1]][2]],
+            mode='lines',
+            line=dict(color='black', width=3),
+            showlegend=False
+        ))
 
 def draw_container(container_dim, boxes, container_type):
     fig = go.Figure()
@@ -41,9 +78,7 @@ def draw_container(container_dim, boxes, container_type):
     colors = ['blue', 'red', 'green', 'orange', 'purple']
     color_idx = 0
 
-    product_report = []
-
-    for i, (bx, by, bz, qty, per_carton, name) in enumerate(boxes):
+    for i, (bx, by, bz, qty, name) in enumerate(boxes):
         box_count = 0
         for _ in range(qty):
             # 공간 초과 시 다음 행으로 이동
@@ -70,16 +105,6 @@ def draw_container(container_dim, boxes, container_type):
             # 다음 박스의 x 좌표 업데이트
             current_x += bx
 
-        # 제품별 CBM 및 전체 제품 수 계산
-        product_cbm = (bx * by * bz * box_count) / 1e9
-        total_products = per_carton * box_count
-        product_report.append({
-            "제품명": name,
-            "선적된 박스 수": box_count,
-            "전체 제품 수": total_products,
-            "제품별 CBM": f"{product_cbm:.2f} m³"
-        })
-
         color_idx += 1
 
     # 레이아웃 설정
@@ -91,23 +116,14 @@ def draw_container(container_dim, boxes, container_type):
             aspectmode='data'
         ),
         margin=dict(r=10, l=10, b=10, t=50),
-        title="컨테이너 선적 시뮬레이션"
+        title=f"{container_type} 컨테이너 선적 시뮬레이션"
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # 결과 요약 출력
-    st.subheader("선적 정보 요약")
-    total_cbm_used = sum(float(report["제품별 CBM"].split()[0]) for report in product_report)
-    remaining_cbm = container_cbm - total_cbm_used
-    st.write(f"**사용된 CBM:** {total_cbm_used:.2f} m³")
-    st.write(f"**남은 CBM:** {remaining_cbm:.2f} m³")
-
-    st.table(product_report)
-
 # Streamlit UI 설정
-st.set_page_config(page_title="혼적 컨테이너 선적 시뮬레이션", layout="wide")
-st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
+st.set_page_config(page_title="YNK 선적 시뮬레이션", layout="wide")
+st.title("YNK 선적 시뮬레이션 (고급 3D)")
 
 # 사이드바 옵션창 생성
 with st.sidebar:
@@ -127,11 +143,8 @@ with st.sidebar:
             length = st.number_input(f"제품 {i + 1} 길이 (mm)", min_value=1, key=f'length_{i}')
             width = st.number_input(f"제품 {i + 1} 너비 (mm)", min_value=1, key=f'width_{i}')
             height = st.number_input(f"제품 {i + 1} 높이 (mm)", min_value=1, key=f'height_{i}')
-            per_carton = st.number_input(f"제품 {i + 1} 카톤당 수량", min_value=1, key=f'per_carton_{i}')
-            order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
-            cartons = calculate_cartons(per_carton, order_qty)
-            st.write(f"**총 카톤 수:** {cartons}")
-            products.append((length, width, height, cartons, per_carton, name))
+            cartons = st.number_input(f"제품 {i + 1} 총 카톤 수", min_value=1, key=f'cartons_{i}')
+            products.append((length, width, height, cartons, name))
 
 # 시뮬레이션 버튼
 if st.button("시뮬레이션 시작"):
