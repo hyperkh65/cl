@@ -3,11 +3,11 @@ import plotly.graph_objects as go
 import numpy as np
 import math
 
-# 컨테이너 정보 (단위: cm, 내부 치수)
+# 컨테이너 정보 (단위: mm, 내부 치수)
 CONTAINERS = {
-    "20ft": {"length": 589.8, "width": 235.2, "height": 239.5},
-    "40ft": {"length": 1202.1, "width": 235.2, "height": 239.5},
-    "40ft HC": {"length": 1202.1, "width": 235.2, "height": 269.1},
+    "20ft": {"length": 5898, "width": 2352, "height": 2395},     # 내부 치수 in mm
+    "40ft": {"length": 12021, "width": 2352, "height": 2395},
+    "40ft HC": {"length": 12021, "width": 2352, "height": 2691},
 }
 
 def calculate_cartons(per_carton, order_qty):
@@ -50,7 +50,7 @@ def draw_container(container_dim, boxes, container_type):
 
     # 컨테이너 치수 및 CBM 계산
     cx, cy, cz = container_dim['length'], container_dim['width'], container_dim['height']
-    container_cbm = (cx / 100) * (cy / 100) * (cz / 100)  # CBM 계산
+    container_cbm = (cx / 1000) * (cy / 1000) * (cz / 1000)  # CBM 계산 (m³)
 
     # 컨테이너 그리기 (투명한 회색 박스)
     add_box(fig, 0, 0, 0, cx, cy, cz, 'lightgrey', 'Container')
@@ -81,23 +81,24 @@ def draw_container(container_dim, boxes, container_type):
 
             # 박스 그리기
             add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], f'Product {i+1}')
-            used_cbm += (bx * by * bz) / 1e6  # cm³을 m³으로 변환
+            used_cbm += (bx * by * bz) / 1e9  # mm³을 m³으로 변환
             total_loaded_boxes += 1
 
             # 다음 박스의 x 좌표 업데이트
             current_x += bx
         color_idx += 1
 
-    # 최대 선적 가능 박스 수 계산 (단순한 방법)
-    # 모든 박스가 동일한 크기일 때 최대 박스 수 계산
-    max_boxes = math.floor(cx / boxes[0][0]) * math.floor(cy / boxes[0][1]) * math.floor(cz / boxes[0][2])
+    # 최대 선적 가능 박스 수 계산
+    max_boxes = 1
+    for bx, by, bz, _ in boxes:
+        max_boxes *= math.floor(cx / bx) * math.floor(cy / by) * math.floor(cz / bz)
 
     # 레이아웃 설정
     fig.update_layout(
         scene=dict(
-            xaxis_title='Length (cm)',
-            yaxis_title='Width (cm)',
-            zaxis_title='Height (cm)',
+            xaxis_title='Length (mm)',
+            yaxis_title='Width (mm)',
+            zaxis_title='Height (mm)',
             aspectmode='data'  # 축 비율을 데이터에 맞게 설정
         ),
         margin=dict(r=10, l=10, b=10, t=50),
@@ -111,7 +112,7 @@ def draw_container(container_dim, boxes, container_type):
         xref="paper",
         yref="paper",
         text=f"컨테이너 타입: {container_type}<br>"
-             f"길이: {cx} cm, 너비: {cy} cm, 높이: {cz} cm<br>"
+             f"길이: {cx} mm, 너비: {cy} mm, 높이: {cz} mm<br>"
              f"CBM: {container_cbm:.2f} m³<br>"
              f"최대 선적 가능 박스 수: {max_boxes}<br>"
              f"실제 선적된 박스 수: {total_loaded_boxes}<br>"
@@ -122,7 +123,7 @@ def draw_container(container_dim, boxes, container_type):
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # 최대 선적 가능 박스 수 및 CBM 정보 표시
+    # 선적 정보 표시
     st.subheader("선적 정보")
     st.write(f"**최대 선적 가능 박스 수:** {max_boxes}")
     st.write(f"**실제 선적된 박스 수:** {total_loaded_boxes}")
@@ -137,12 +138,12 @@ container_type = st.selectbox("컨테이너 사이즈 선택", list(CONTAINERS.k
 container_dim = CONTAINERS[container_type]
 
 # 컨테이너 정보 및 CBM 표시 (사이드바)
-cbm = (container_dim['length'] / 100) * (container_dim['width'] / 100) * (container_dim['height'] / 100)
+cbm = (container_dim['length'] / 1000) * (container_dim['width'] / 1000) * (container_dim['height'] / 1000)
 st.sidebar.header("컨테이너 정보")
 st.sidebar.write(f"**컨테이너 타입:** {container_type}")
-st.sidebar.write(f"**길이:** {container_dim['length']} cm")
-st.sidebar.write(f"**너비:** {container_dim['width']} cm")
-st.sidebar.write(f"**높이:** {container_dim['height']} cm")
+st.sidebar.write(f"**길이:** {container_dim['length']} mm")
+st.sidebar.write(f"**너비:** {container_dim['width']} mm")
+st.sidebar.write(f"**높이:** {container_dim['height']} mm")
 st.sidebar.write(f"**CBM:** {cbm:.2f} m³")
 
 # 제품 수량 선택
@@ -151,9 +152,9 @@ num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_v
 products = []
 for i in range(int(num_products)):
     st.subheader(f"제품 {i + 1} 정보 입력")
-    length = st.number_input(f"제품 {i + 1} 길이 (cm)", min_value=1, key=f'length_{i}')
-    width = st.number_input(f"제품 {i + 1} 너비 (cm)", min_value=1, key=f'width_{i}')
-    height = st.number_input(f"제품 {i + 1} 높이 (cm)", min_value=1, key=f'height_{i}')
+    length = st.number_input(f"제품 {i + 1} 길이 (mm)", min_value=1, key=f'length_{i}')
+    width = st.number_input(f"제품 {i + 1} 너비 (mm)", min_value=1, key=f'width_{i}')
+    height = st.number_input(f"제품 {i + 1} 높이 (mm)", min_value=1, key=f'height_{i}')
     per_carton = st.number_input(f"제품 {i + 1} 카톤당 수량", min_value=1, key=f'per_carton_{i}')
     order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
     cartons = calculate_cartons(per_carton, order_qty)
