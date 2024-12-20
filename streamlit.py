@@ -160,6 +160,12 @@ def optimize_packing(container_dim, products):
     for i, product in enumerate(products):
         name = f"Product {i+1}"
         for _ in range(product['cartons']):
+            # 제품 크기가 컨테이너보다 큰지 확인
+            if (product['length'] > container_dim['length'] or
+                product['width'] > container_dim['width'] or
+                product['height'] > container_dim['height']):
+                st.error(f"제품 {i+1} 크기가 컨테이너 크기를 초과합니다.")
+                continue  # 해당 제품은 패킹에서 제외
             packer.add_item(Item(name, product['length'], product['width'], product['height'], 1, rotate=False))
 
     # 패킹 수행
@@ -170,10 +176,10 @@ def optimize_packing(container_dim, products):
 def volume_based_estimation(container_dim, products):
     container_volume = (container_dim['length'] * container_dim['width'] * container_dim['height']) / 1e9  # m³
     total_product_volume = sum((p['length'] * p['width'] * p['height'] / 1e9) * p['cartons'] for p in products)
-    cbm_usage = total_product_volume / container_volume * 100
+    cbm_usage = (total_product_volume / container_volume) * 100
     return total_product_volume, cbm_usage
 
-# Streamlit UI
+# Streamlit UI 설정
 st.set_page_config(page_title="컨테이너 선적 시뮬레이션", layout="wide")
 st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
 
@@ -183,7 +189,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.header("제품 정보 입력")
     num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=10, step=1, key='num_products')
-    
+
     products = []
     for i in range(int(num_products)):
         with st.expander(f"제품 {i + 1} 설정", expanded=True):
@@ -219,29 +225,10 @@ if st.button("시뮬레이션 시작"):
         total_boxes = sum(p['cartons'] for p in products)
         if total_boxes > 1000:
             st.warning("대량의 박스는 패킹 계산에 시간이 오래 걸릴 수 있습니다.")
-            with st.spinner('패킹 계산 중...'):
-                # 간단한 배치 로직 (회전 및 재배치 없이 순차적으로 배치)
-                packer = Packer()
-
-                # 컨테이너를 추가
-                bin = Bin('Container', container_dim['length'], container_dim['width'], container_dim['height'], max_weight=1000000)
-                packer.add_bin(bin)
-
-                # 제품을 추가 (회전 비활성화)
-                for i, product in enumerate(products):
-                    name = f"Product {i+1}"
-                    for _ in range(product['cartons']):
-                        packer.add_item(Item(name, product['length'], product['width'], product['height'], 1, rotate=False))
-
-                # 패킹 수행
-                packer.pack()
-
-                draw_packing(packer, container_dim, container_type)
-                display_results(packer, cbm, container_dim)
-            st.success('패킹 계산이 완료되었습니다!')
-        else:
-            with st.spinner('패킹 계산 중...'):
-                packer = optimize_packing(container_dim, products)
-                draw_packing(packer, container_dim, container_type)
-                display_results(packer, cbm, container_dim)
-            st.success('패킹 계산이 완료되었습니다!')
+        
+        with st.spinner('패킹 계산 중...'):
+            packer = optimize_packing(container_dim, products)
+        
+        draw_packing(packer, container_dim, container_type)
+        display_results(packer, cbm, container_dim)
+        st.success('패킹 계산이 완료되었습니다!')
