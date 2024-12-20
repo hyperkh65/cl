@@ -2,9 +2,6 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 import math
-from io import BytesIO
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 
 # 컨테이너 정보 (단위: cm)
 CONTAINERS = {
@@ -16,74 +13,125 @@ CONTAINERS = {
 def calculate_cartons(per_carton, order_qty):
     return math.ceil(order_qty / per_carton)
 
+def calculate_cbm(length, width, height, quantity):
+    return (length * width * height * quantity) / 1e6  # cm³을 m³으로 변환
+
+def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
+    # 8개의 꼭짓점 정의
+    vertices = np.array([
+        [x0, y0, z0],
+        [x0 + dx, y0, z0],
+        [x0 + dx, y0 + dy, z0],
+        [x0, y0 + dy, z0],
+        [x0, y0, z0 + dz],
+        [x0 + dx, y0, z0 + dz],
+        [x0 + dx, y0 + dy, z0 + dz],
+        [x0, y0 + dy, z0 + dz]
+    ])
+
+    # 삼각형을 구성하는 인덱스 정의
+    I = [0, 0, 0, 1, 1, 2, 4, 4, 4, 5, 5, 6]
+    J = [1, 3, 4, 2, 3, 3, 5, 6, 7, 6, 7, 7]
+    K = [3, 4, 5, 3, 7, 7, 6, 7, 5, 7, 4, 5]
+
+    # Mesh3d로 박스 추가
+    fig.add_trace(go.Mesh3d(
+        x=vertices[:,0],
+        y=vertices[:,1],
+        z=vertices[:,2],
+        i=I,
+        j=J,
+        k=K,
+        color=color,
+        opacity=0.6,
+        name=name,
+        showscale=False
+    ))
+
 def draw_container(container_dim, boxes, container_type):
     fig = go.Figure()
 
     # 컨테이너 치수 및 CBM 계산
     cx, cy, cz = container_dim['length'], container_dim['width'], container_dim['height']
-    container_cbm = (cx / 100) * (cy / 100) * (cz / 100)
+    container_cbm = (cx / 100) * (cy / 100) * (cz / 100)  # CBM 계산
 
-    # 컨테이너 그리기
-    fig.add_trace(go.Mesh3d(
-        x=[0, cx, cx, 0, 0, cx, cx, 0],
-        y=[0, 0, cy, cy, 0, 0, cy, cy],
-        z=[0, 0, 0, 0, cz, cz, cz, cz],
-        i=[0, 0, 0, 1, 2, 3, 4, 5, 6, 7],
-        j=[1, 2, 3, 2, 3, 0, 5, 6, 7, 4],
-        k=[4, 5, 6, 6, 7, 7, 1, 2, 3, 3],
-        color='lightgrey',
-        opacity=0.5
-    ))
+    # 컨테이너 그리기 (투명한 회색 박스)
+    add_box(fig, 0, 0, 0, cx, cy, cz, 'lightgrey', 'Container')
+
+    # 박스 배치 초기 위치
+    current_x, current_y, current_z = 0, 0, 0
+    used_cbm = 0
+    total_loaded_boxes = 0
+    colors = ['blue', 'red', 'green', 'orange', 'purple']
+    color_idx = 0
+
+    product_report = []
+
+    for i, (bx, by, bz, qty, per_carton, name) in enumerate(boxes):
+        box_count = 0
+        for _ in range(qty):
+            # 공간 초과 시 다음 행으로 이동
+            if current_x + bx > cx:
+                current_x = 0
+                current_y += by
+
+            # 공간 초과 시 다음 층으로 이동
+            if current_y + by > cy:
+                current_y = 0
+                current_z += bz
+
+            # 공간 초과 시 더 이상 배치 불가
+            if current_z + bz > cz:
+                st.warning(f"⚠️ 컨테이너에 더 이상 {name} 제품을 배치할 공간이 없습니다.")
+                break
+
+            # 박스 그리기
+            add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], name)
+            used_cbm += (bx * by * bz) / 1e6  # cm³을 m³으로 변환
+            total_loaded_boxes += 1
+            box_count += 1
+
+            # 다음 박스의 x 좌표 업데이트
+            current_x += bx
+
+        # 제품별 CBM 및 전체 제품 수 계산
+        product_cbm = (bx * by * bz * box_count) / 1e6
+        total_products = per_carton * box_count
+        product_report.append({
+            "제품명": name,
+            "선적된 박스 수": box_count,
+            "전체 제품 수": total_products,
+            "제품별 CBM": f"{product_cbm:.2f} m³"
+        })
+
+        color_idx += 1
+
+    # 레이아웃 설정
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='Length (cm)',
+            yaxis_title='Width (cm)',
+            zaxis_title='Height (cm)',
+            aspectmode='data'
+        ),
+        margin=dict(r=10, l=10, b=10, t=50),
+        title="컨테이너 선적 시뮬레이션"
+    )
 
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("PDF로 출력")
-    if st.button("PDF로 출력"):
-        create_pdf(container_type, container_dim, boxes, container_cbm)
+    # 결과 요약 출력
+    st.subheader("선적 정보 요약")
+    total_cbm_used = sum(float(report["제품별 CBM"].split()[0]) for report in product_report)
+    remaining_cbm = container_cbm - total_cbm_used
+    st.write(f"**사용된 CBM:** {total_cbm_used:.2f} m³")
+    st.write(f"**남은 CBM:** {remaining_cbm:.2f} m³")
 
-def create_pdf(container_type, container_dim, boxes, container_cbm):
-    buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=letter)
-    pdf.setTitle("YNK 선적 시뮬레이션")
-
-    # 타이틀
-    pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawString(200, 750, "YNK 선적 시뮬레이션 보고서")
-
-    # 컨테이너 정보
-    pdf.setFont("Helvetica", 12)
-    pdf.drawString(50, 720, f"컨테이너 타입: {container_type}")
-    pdf.drawString(50, 700, f"내부 치수: {container_dim['length']} x {container_dim['width']} x {container_dim['height']} cm")
-    pdf.drawString(50, 680, f"총 CBM: {container_cbm:.2f} m³")
-
-    # 제품 정보
-    y = 640
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(50, y, "제품 정보:")
-    pdf.setFont("Helvetica", 12)
-    y -= 20
-
-    for i, (length, width, height, cartons, per_carton, name) in enumerate(boxes):
-        pdf.drawString(50, y, f"{i + 1}. 제품명: {name}")
-        pdf.drawString(70, y - 20, f"크기: {length} x {width} x {height} cm")
-        pdf.drawString(70, y - 40, f"카톤당 수량: {per_carton}")
-        pdf.drawString(70, y - 60, f"총 카톤 수: {cartons}")
-        y -= 80
-
-    pdf.showPage()
-    pdf.save()
-
-    buffer.seek(0)
-    st.download_button(
-        label="PDF 다운로드",
-        data=buffer,
-        file_name="YNK_shipping_simulation.pdf",
-        mime="application/pdf"
-    )
+    st.table(product_report)
 
 # Streamlit UI 설정
-st.set_page_config(page_title="YNK 선적 시뮬레이션", layout="wide")
-st.title("YNK 선적 시뮬레이션")
+st.set_page_config(page_title="혼적 컨테이너 선적 시뮬레이션", layout="wide")
+st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
 
 # 사이드바 옵션창 생성
 with st.sidebar:
@@ -109,6 +157,12 @@ with st.sidebar:
             st.write(f"**총 카톤 수:** {cartons}")
             products.append((length, width, height, cartons, per_carton, name))
 
-# 시뮬레이션 버튼
-if st.button("시뮬레이션 시작"):
+    # 시뮬레이션 버튼
+    if st.button("시뮬레이션 시작"):
+        st.session_state.start_simulation = True
+
+# 메인 화면에 시뮬레이션 결과 표시
+if 'start_simulation' in st.session_state and st.session_state.start_simulation:
+    st.subheader(f"{container_type} 컨테이너에 제품을 선적하는 시뮬레이션입니다.")
     draw_container(container_dim, products, container_type)
+    st.session_state.start_simulation = False
