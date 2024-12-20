@@ -5,33 +5,33 @@ import math
 
 # 컨테이너 정보 (단위: cm)
 CONTAINERS = {
-    "20ft": {"length": 605.8, "width": 243.8, "height": 259.1},
-    "40ft": {"length": 1219.2, "width": 243.8, "height": 259.1},
-    "40ft HC": {"length": 1219.2, "width": 243.8, "height": 289.6},
+    "20ft": {"length": 589.8, "width": 235.2, "height": 239.5},     # 내부 치수
+    "40ft": {"length": 1202.1, "width": 235.2, "height": 239.5},
+    "40ft HC": {"length": 1202.1, "width": 235.2, "height": 269.1},
 }
 
 def calculate_cartons(per_carton, order_qty):
-    cartons = math.ceil(order_qty / per_carton)
-    return cartons
+    return math.ceil(order_qty / per_carton)
 
-def add_box(fig, x, y, z, dx, dy, dz, color):
-    # Define the 8 vertices of the box
+def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
+    # 8개의 꼭짓점 정의
     vertices = np.array([
-        [x, y, z],
-        [x + dx, y, z],
-        [x + dx, y + dy, z],
-        [x, y + dy, z],
-        [x, y, z + dz],
-        [x + dx, y, z + dz],
-        [x + dx, y + dy, z + dz],
-        [x, y + dy, z + dz]
+        [x0, y0, z0],
+        [x0 + dx, y0, z0],
+        [x0 + dx, y0 + dy, z0],
+        [x0, y0 + dy, z0],
+        [x0, y0, z0 + dz],
+        [x0 + dx, y0, z0 + dz],
+        [x0 + dx, y0 + dy, z0 + dz],
+        [x0, y0 + dy, z0 + dz]
     ])
 
-    # Define the 12 triangles composing the box
+    # 삼각형을 구성하는 인덱스 정의
     I = [0, 0, 0, 1, 1, 2, 4, 4, 4, 5, 5, 6]
-    J = [1, 2, 3, 2, 3, 3, 5, 6, 7, 6, 7, 7]
-    K = [3, 3, 1, 3, 7, 7, 6, 7, 5, 7, 4, 5]
+    J = [1, 3, 4, 2, 3, 3, 5, 6, 7, 6, 7, 7]
+    K = [3, 4, 5, 3, 7, 7, 6, 7, 5, 7, 4, 5]
 
+    # Mesh3d로 박스 추가
     fig.add_trace(go.Mesh3d(
         x=vertices[:,0],
         y=vertices[:,1],
@@ -40,28 +40,29 @@ def add_box(fig, x, y, z, dx, dy, dz, color):
         j=J,
         k=K,
         color=color,
-        opacity=0.5,
-        name='Product Box'
+        opacity=0.6,
+        name=name,
+        showscale=False
     ))
 
 def draw_container(container_dim, boxes):
     fig = go.Figure()
 
-    cx, cy, cz = container_dim.values()
+    # 컨테이너 치수 및 CBM 계산
+    cx, cy, cz = container_dim['length'], container_dim['width'], container_dim['height']
     cbm = (cx / 100) * (cy / 100) * (cz / 100)  # CBM 계산
 
     # 컨테이너 그리기 (투명한 회색 박스)
-    add_box(fig, 0, 0, 0, cx, cy, cz, 'lightgrey')
+    add_box(fig, 0, 0, 0, cx, cy, cz, 'lightgrey', 'Container')
 
-    # 박스 배치
+    # 박스 배치 초기 위치
     current_x, current_y, current_z = 0, 0, 0
-    max_z = cz
     colors = ['blue', 'red', 'green', 'orange', 'purple']
     color_idx = 0
 
     for i, (bx, by, bz, qty) in enumerate(boxes):
         for _ in range(qty):
-            # 공간 초과 시 다음 행 또는 층으로 이동
+            # 현재 박스가 컨테이너를 초과하는지 확인
             if current_x + bx > cx:
                 current_x = 0
                 current_y += by
@@ -73,7 +74,9 @@ def draw_container(container_dim, boxes):
                 break
 
             # 박스 그리기
-            add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)])
+            add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], f'Product {i+1}')
+
+            # 다음 박스의 x 좌표 업데이트
             current_x += bx
         color_idx += 1
 
@@ -85,7 +88,7 @@ def draw_container(container_dim, boxes):
             zaxis_title='Height (cm)',
             aspectmode='data'  # 축 비율을 데이터에 맞게 설정
         ),
-        margin=dict(r=10, l=10, b=10, t=10),
+        margin=dict(r=10, l=10, b=10, t=50),
         title="컨테이너 선적 시뮬레이션"
     )
 
@@ -111,7 +114,7 @@ st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
 container_type = st.selectbox("컨테이너 사이즈 선택", list(CONTAINERS.keys()))
 container_dim = CONTAINERS[container_type]
 
-# 컨테이너 정보 및 CBM 표시
+# 컨테이너 정보 및 CBM 표시 (사이드바)
 cbm = (container_dim['length'] / 100) * (container_dim['width'] / 100) * (container_dim['height'] / 100)
 st.sidebar.header("컨테이너 정보")
 st.sidebar.write(f"**컨테이너 타입:** {container_type}")
