@@ -16,9 +16,6 @@ CONTAINERS = {
 def calculate_cartons(per_carton, order_qty):
     return math.ceil(order_qty / per_carton)
 
-def calculate_cbm(length, width, height, quantity):
-    return (length * width * height * quantity) / 1e9  # mm³을 m³으로 변환
-
 def draw_container(container_dim, boxes, container_type):
     fig = go.Figure()
 
