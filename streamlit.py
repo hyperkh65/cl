@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 import math
+from itertools import permutations
 
 # 컨테이너 정보 (단위: mm, 내부 치수)
 CONTAINERS = {
@@ -45,12 +46,12 @@ def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
         showscale=False
     ))
 
-def draw_container(container_dim, boxes, container_type):
+def draw_container(container_dim, box_dim, total_boxes, container_type):
     fig = go.Figure()
 
     # 컨테이너 치수 및 CBM 계산
     cx, cy, cz = container_dim['length'], container_dim['width'], container_dim['height']
-    container_cbm = (cx / 1000) * (cy / 1000) * (cz / 1000)  # CBM 계산 (m³)
+    container_cbm = (cx / 1000) * (cy / 1000) * (cz / 1000)  # m³
 
     # 컨테이너 그리기 (투명한 회색 박스)
     add_box(fig, 0, 0, 0, cx, cy, cz, 'lightgrey', 'Container')
@@ -58,48 +59,25 @@ def draw_container(container_dim, boxes, container_type):
     # 박스 배치 초기 위치
     current_x, current_y, current_z = 0, 0, 0
     used_cbm = 0.0
-    total_loaded_boxes = 0
-    colors = ['blue', 'red', 'green', 'orange', 'purple']
-    color_idx = 0
+    color = 'blue'
 
-    # 제품별 CBM 및 박스 수량 추적
-    product_cbm = {}
-    loaded_boxes_per_product = {}
+    for i in range(total_boxes):
+        # 박스가 컨테이너를 초과하지 않도록 위치 조정
+        if current_x + box_dim['length'] > cx:
+            current_x = 0
+            current_y += box_dim['width']
+        if current_y + box_dim['width'] > cy:
+            current_y = 0
+            current_z += box_dim['height']
+        if current_z + box_dim['height'] > cz:
+            break
 
-    for i, (bx, by, bz, qty) in enumerate(boxes):
-        loaded_boxes_per_product[i] = 0
-        product_cbm[i] = 0.0
-        for _ in range(qty):
-            # 공간 초과 시 다음 행으로 이동
-            if current_x + bx > cx:
-                current_x = 0
-                current_y += by
+        # 박스 그리기
+        add_box(fig, current_x, current_y, current_z, box_dim['length'], box_dim['width'], box_dim['height'], color, 'Box')
+        used_cbm += (box_dim['length'] * box_dim['width'] * box_dim['height']) / 1e9  # m³
 
-            # 공간 초과 시 다음 층으로 이동
-            if current_y + by > cy:
-                current_y = 0
-                current_z += bz
-
-            # 공간 초과 시 더 이상 배치 불가
-            if current_z + bz > cz:
-                st.warning(f"⚠️ 컨테이너에 더 이상 {i+1}번째 제품을 배치할 공간이 없습니다.")
-                break
-
-            # 박스 그리기
-            add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], f'Product {i+1}')
-            used_cbm += (bx * by * bz) / 1e9  # mm³을 m³으로 변환
-            total_loaded_boxes += 1
-            loaded_boxes_per_product[i] += 1
-            product_cbm[i] += (bx * by * bz) / 1e9  # m³
-
-            # 다음 박스의 x 좌표 업데이트
-            current_x += bx
-        color_idx += 1
-
-    # 최대 선적 가능 박스 수 계산
-    max_boxes = 1
-    for i, (bx, by, bz, _) in enumerate(boxes):
-        max_boxes *= math.floor(cx / bx) * math.floor(cy / by) * math.floor(cz / bz)
+        # 다음 박스의 x 좌표 업데이트
+        current_x += box_dim['length']
 
     # 레이아웃 설정
     fig.update_layout(
@@ -121,9 +99,7 @@ def draw_container(container_dim, boxes, container_type):
         yref="paper",
         text=f"컨테이너 타입: {container_type}<br>"
              f"길이: {cx} mm, 너비: {cy} mm, 높이: {cz} mm<br>"
-             f"CBM: {container_cbm:.2f} m³<br>"
-             f"최대 선적 가능 박스 수: {max_boxes}<br>"
-             f"실제 선적된 박스 수: {total_loaded_boxes}<br>"
+             f"총 CBM: {container_cbm:.2f} m³<br>"
              f"사용된 CBM: {used_cbm:.2f} m³",
         showarrow=False,
         font=dict(size=12)
@@ -131,22 +107,46 @@ def draw_container(container_dim, boxes, container_type):
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # 선적 정보 표시
+    # 선적 정보 표 작성
     st.subheader("선적 정보")
-    st.write(f"**최대 선적 가능 박스 수:** {max_boxes}")
-    st.write(f"**실제 선적된 박스 수:** {total_loaded_boxes}")
-    st.write(f"**사용된 CBM:** {used_cbm:.2f} m³ / **총 CBM:** {container_cbm:.2f} m³")
-    st.write(f"**CBM 사용률:** { (used_cbm / container_cbm) * 100:.2f}%")
+    data = {
+        "최대 선적 가능 박스 수": [total_boxes],
+        "실제 선적된 박스 수": [min(total_boxes, total_boxes)],
+        "사용된 CBM": [used_cbm],
+        "총 CBM": [container_cbm],
+        "CBM 사용률": [f"{(used_cbm / container_cbm) * 100:.2f}%"]
+    }
+    st.table(data)
 
-    # 제품별 상세 정보 표시
-    st.subheader("제품별 선적 정보")
-    for i, (bx, by, bz, qty) in enumerate(boxes):
-        st.write(f"**제품 {i+1}:**")
-        st.write(f" - 박스 크기: {bx} mm × {by} mm × {bz} mm")
-        st.write(f" - 카톤당 수량: {qty} 개")
-        st.write(f" - 총 발주 수량: {qty} 개")  # 카톤당 수량이 1개이므로 발주 수량과 동일
-        st.write(f" - 선적된 박스 수: {loaded_boxes_per_product[i]} 개")
-        st.write(f" - 제품별 사용된 CBM: {product_cbm[i]:.2f} m³")
+def optimize_packing(container_dim, box_dim, order_qty):
+    # 박스의 모든 가능한 회전(6가지)을 고려
+    dimensions = [box_dim['length'], box_dim['width'], box_dim['height']]
+    possible_orientations = set(permutations(dimensions))
+    
+    max_boxes = 0
+    best_orientation = dimensions
+
+    for orientation in possible_orientations:
+        lx, ly, lz = orientation
+        boxes_length = container_dim['length'] // lx
+        boxes_width = container_dim['width'] // ly
+        boxes_height = container_dim['height'] // lz
+        total = boxes_length * boxes_width * boxes_height
+        if total > max_boxes:
+            max_boxes = total
+            best_orientation = orientation
+
+    # 실제 선적 가능한 박스 수
+    actual_loaded_boxes = min(max_boxes, order_qty)
+
+    # 최적의 박스 방향
+    optimal_box_dim = {
+        'length': best_orientation[0],
+        'width': best_orientation[1],
+        'height': best_orientation[2]
+    }
+
+    return max_boxes, actual_loaded_boxes, optimal_box_dim
 
 # Streamlit UI
 st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
@@ -162,7 +162,7 @@ st.sidebar.write(f"**컨테이너 타입:** {container_type}")
 st.sidebar.write(f"**길이:** {container_dim['length']} mm")
 st.sidebar.write(f"**너비:** {container_dim['width']} mm")
 st.sidebar.write(f"**높이:** {container_dim['height']} mm")
-st.sidebar.write(f"**CBM:** {cbm:.2f} m³")
+st.sidebar.write(f"**총 CBM:** {cbm:.2f} m³")
 
 # 제품 수량 선택
 num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1)
@@ -184,4 +184,34 @@ if st.button("시뮬레이션 시작"):
         st.warning("적어도 하나의 제품 정보를 입력해주세요.")
     else:
         st.subheader(f"{container_type} 컨테이너에 제품을 선적하는 시뮬레이션입니다.")
-        draw_container(container_dim, products, container_type)
+        
+        # 단일 제품 시뮬레이션 (현재 예제는 단일 제품만 처리)
+        if len(products) > 1:
+            st.warning("현재 시뮬레이션은 단일 제품 타입만 지원됩니다.")
+        else:
+            box_length, box_width, box_height, cartons = products[0]
+            order_qty = cartons  # 카톤당 수량이 1개인 경우
+            
+            # 박스 회전 최적화
+            max_boxes, actual_loaded_boxes, optimal_box_dim = optimize_packing(container_dim, 
+                                                                                 {'length': box_length, 
+                                                                                  'width': box_width, 
+                                                                                  'height': box_height},
+                                                                                 order_qty)
+            
+            # 시각화
+            draw_container(container_dim, optimal_box_dim, actual_loaded_boxes, container_type)
+            
+            # CBM 정보 및 표 출력
+            st.subheader("제품별 선적 정보")
+            product_cbm = (optimal_box_dim['length'] * optimal_box_dim['width'] * optimal_box_dim['height']) / 1e9  # m³
+            total_cbm_used = actual_loaded_boxes * product_cbm
+            data = {
+                "최대 선적 가능 박스 수": [max_boxes],
+                "실제 선적된 박스 수": [actual_loaded_boxes],
+                "제품 1개당 CBM": [f"{product_cbm:.4f} m³"],
+                "사용된 CBM": [f"{total_cbm_used:.4f} m³"],
+                "총 CBM": [f"{cbm:.2f} m³"],
+                "CBM 사용률": [f"{(total_cbm_used / cbm) * 100:.2f}%"]
+            }
+            st.table(data)
