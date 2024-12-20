@@ -131,7 +131,7 @@ def draw_container(container_dim, boxes, container_type):
 
 # Streamlit UI 설정
 st.set_page_config(page_title="YNK_컨테이너 선적 시물레이션", layout="wide")
-st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
+st.title("YNK_컨테이너 선적 시물레이션")
 
 # 사이드바 옵션창 생성
 with st.sidebar:
