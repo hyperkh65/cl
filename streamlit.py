@@ -5,7 +5,7 @@ import math
 
 # 컨테이너 정보 (단위: cm)
 CONTAINERS = {
-    "20ft": {"length": 589.8, "width": 235.2, "height": 239.5},     # 내부 치수
+    "20ft": {"length": 589.8, "width": 235.2, "height": 239.5},
     "40ft": {"length": 1202.1, "width": 235.2, "height": 239.5},
     "40ft HC": {"length": 1202.1, "width": 235.2, "height": 269.1},
 }
@@ -67,7 +67,7 @@ def draw_container(container_dim, boxes, container_type):
 
     product_report = []
 
-    for i, (bx, by, bz, qty, name) in enumerate(boxes):
+    for i, (bx, by, bz, qty, per_carton, name) in enumerate(boxes):
         box_count = 0
         for _ in range(qty):
             # 공간 초과 시 다음 행으로 이동
@@ -94,11 +94,13 @@ def draw_container(container_dim, boxes, container_type):
             # 다음 박스의 x 좌표 업데이트
             current_x += bx
 
+        # 제품별 CBM 및 전체 제품 수 계산
         product_cbm = (bx * by * bz * box_count) / 1e6
+        total_products = per_carton * box_count
         product_report.append({
             "제품명": name,
             "선적된 박스 수": box_count,
-            "전체 제품 수": box_count,
+            "전체 제품 수": total_products,
             "제품별 CBM": f"{product_cbm:.2f} m³"
         })
 
@@ -153,7 +155,7 @@ with st.sidebar:
             order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
             cartons = calculate_cartons(per_carton, order_qty)
             st.write(f"**총 카톤 수:** {cartons}")
-            products.append((length, width, height, cartons, name))
+            products.append((length, width, height, cartons, per_carton, name))
 
     # 시뮬레이션 버튼
     if st.button("시뮬레이션 시작"):
