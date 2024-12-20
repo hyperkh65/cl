@@ -4,6 +4,7 @@ import numpy as np
 import math
 from py3dbp import Packer, Bin, Item
 import pandas as pd
+from itertools import permutations
 
 # 컨테이너 정보 (단위: mm, 내부 치수)
 CONTAINERS = {
@@ -60,10 +61,14 @@ def draw_packing(packer, container_dim, container_type):
     # 색상 리스트
     colors = ['blue', 'red', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow', 'lime', 'pink']
 
+    # 제품 이름을 기반으로 색상 매핑
+    product_names = list(set(item.name for bin in packer.bins for item in bin.items))
+    color_map = {name: colors[i % len(colors)] for i, name in enumerate(product_names)}
+
     # 박스 시각화
     for bin in packer.bins:
         for item in bin.items:
-            color = colors[item.type_id % len(colors)]
+            color = color_map[item.name]
             add_box(fig, item.position[0], item.position[1], item.position[2],
                     item.width, item.height, item.depth, color, item.name)
 
@@ -105,24 +110,35 @@ def display_results(packer, container_cbm):
     total_loaded_boxes = 0
     total_used_cbm = 0.0
 
+    # 제품별 선적 정보 집계
+    product_dict = {}
     for bin in packer.bins:
         for item in bin.items:
-            data["제품 타입"].append(item.name)
-            data["선적된 박스 수"].append(1)  # 각 아이템은 하나의 박스를 의미
-            product_cbm = (item.width * item.height * item.depth) / 1e9  # m³
-            data["제품 1개당 CBM"].append(f"{product_cbm:.4f} m³")
-            data["제품별 사용된 CBM"].append(f"{product_cbm:.4f} m³")
+            if item.name not in product_dict:
+                product_dict[item.name] = {"count": 0, "cbm": 0.0}
+            product_dict[item.name]["count"] += 1
+            product_dict[item.name]["cbm"] += (item.width * item.height * item.depth) / 1e9  # m³
             total_loaded_boxes += 1
-            total_used_cbm += product_cbm
+            total_used_cbm += (item.width * item.height * item.depth) / 1e9  # m³
+
+    # 데이터 프레임 생성
+    for name, info in product_dict.items():
+        data["제품 타입"].append(name)
+        data["선적된 박스 수"].append(info["count"])
+        data["제품 1개당 CBM"].append(f"{info['cbm'] / info['count']:.4f} m³")
+        data["제품별 사용된 CBM"].append(f"{info['cbm']:.4f} m³")
 
     df = pd.DataFrame(data)
-    st.subheader("선적 정보")
+    st.subheader("제품별 선적 정보")
     st.table(df)
 
     # 총 선적 정보
     st.subheader("총 선적 정보")
     summary_data = {
-        "최대 선적 가능 박스 수": [packer.bins[0].total_items if packer.bins else 0],
+        "최대 선적 가능 박스 수": [sum([math.floor(container_dim['length'] / (item.width)) *
+                                       math.floor(container_dim['width'] / (item.height)) *
+                                       math.floor(container_dim['height'] / (item.depth))
+                                       for bin in packer.bins for item in bin.items])],
         "실제 선적된 박스 수": [total_loaded_boxes],
         "사용된 CBM": [f"{total_used_cbm:.4f} m³"],
         "총 CBM": [f"{container_cbm:.2f} m³"],
