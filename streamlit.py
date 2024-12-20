@@ -58,7 +58,7 @@ def draw_container(container_dim, boxes):
     # 박스 배치 초기 위치
     current_x, current_y, current_z = 0, 0, 0
     used_cbm = 0
-    total_boxes = 0
+    total_loaded_boxes = 0
     colors = ['blue', 'red', 'green', 'orange', 'purple']
     color_idx = 0
 
@@ -82,16 +82,18 @@ def draw_container(container_dim, boxes):
             # 박스 그리기
             add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], f'Product {i+1}')
             used_cbm += (bx * by * bz) / 1e6  # cm³을 m³으로 변환
-            total_boxes += 1
+            total_loaded_boxes += 1
 
             # 다음 박스의 x 좌표 업데이트
             current_x += bx
-
         color_idx += 1
 
-    # 최대 선적 가능 수량 계산 (단순한 방법)
-    max_boxes = math.floor(cx / min([box[0] for box in boxes])) * math.floor(cy / min([box[1] for box in boxes])) * math.floor(cz / min([box[2] for box in boxes]))
-    max_cbm = (cx * cy * cz) / 1e6  # cm³을 m³으로 변환
+    # 최대 선적 가능 박스 수 계산 (단순한 방법)
+    # 모든 박스가 동일한 크기일 때 최대 박스 수 계산
+    # 여기서는 모든 제품을 배치할 수 있는 최대 박스 수를 단순 계산
+    max_boxes = 0
+    for bx, by, bz, _ in boxes:
+        max_boxes += math.floor(cx / bx) * math.floor(cy / by) * math.floor(cz / bz)
 
     # 레이아웃 설정
     fig.update_layout(
@@ -108,7 +110,7 @@ def draw_container(container_dim, boxes):
     # 컨테이너 정보 및 CBM 표시
     fig.add_annotation(
         x=0.5,
-        y=1.1,
+        y=1.15,
         xref="paper",
         yref="paper",
         text=f"컨테이너 타입: {container_type}<br>"
@@ -125,7 +127,9 @@ def draw_container(container_dim, boxes):
     # 최대 선적 가능 박스 수 및 CBM 정보 표시
     st.subheader("선적 정보")
     st.write(f"**최대 선적 가능 박스 수:** {max_boxes}")
+    st.write(f"**실제 선적된 박스 수:** {total_loaded_boxes}")
     st.write(f"**사용된 CBM:** {used_cbm:.2f} m³ / **총 CBM:** {container_cbm:.2f} m³")
+    st.write(f"**CBM 사용률:** { (used_cbm / container_cbm) * 100:.2f}%")
 
 # Streamlit UI
 st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
