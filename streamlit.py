@@ -45,7 +45,7 @@ def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
         showscale=False
     ))
 
-def draw_container(container_dim, boxes):
+def draw_container(container_dim, boxes, container_type):
     fig = go.Figure()
 
     # 컨테이너 치수 및 CBM 계산
@@ -89,8 +89,6 @@ def draw_container(container_dim, boxes):
         color_idx += 1
 
     # 최대 선적 가능 박스 수 계산 (단순한 방법)
-    # 모든 박스가 동일한 크기일 때 최대 박스 수 계산
-    # 여기서는 모든 제품을 배치할 수 있는 최대 박스 수를 단순 계산
     max_boxes = 0
     for bx, by, bz, _ in boxes:
         max_boxes += math.floor(cx / bx) * math.floor(cy / by) * math.floor(cz / bz)
@@ -132,36 +130,39 @@ def draw_container(container_dim, boxes):
     st.write(f"**CBM 사용률:** { (used_cbm / container_cbm) * 100:.2f}%")
 
 # Streamlit UI
+st.set_page_config(page_title="혼적 컨테이너 선적 시뮬레이션", layout="wide")
 st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
 
-# 컨테이너 선택
-container_type = st.selectbox("컨테이너 사이즈 선택", list(CONTAINERS.keys()))
-container_dim = CONTAINERS[container_type]
+# 좌우 레이아웃 설정
+col1, col2 = st.columns(2)
 
-# 컨테이너 정보 및 CBM 표시 (사이드바)
-cbm = (container_dim['length'] / 100) * (container_dim['width'] / 100) * (container_dim['height'] / 100)
-st.sidebar.header("컨테이너 정보")
-st.sidebar.write(f"**컨테이너 타입:** {container_type}")
-st.sidebar.write(f"**길이:** {container_dim['length']} cm")
-st.sidebar.write(f"**너비:** {container_dim['width']} cm")
-st.sidebar.write(f"**높이:** {container_dim['height']} cm")
-st.sidebar.write(f"**CBM:** {cbm:.2f} m³")
+with col1:
+    st.header("제품 정보 입력")
+    num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1)
 
-# 제품 수량 선택
-num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1)
+    products = []
+    for i in range(int(num_products)):
+        with st.expander(f"제품 {i + 1} 설정", expanded=True):
+            length = st.number_input(f"제품 {i + 1} 길이 (cm)", min_value=1, key=f'length_{i}')
+            width = st.number_input(f"제품 {i + 1} 너비 (cm)", min_value=1, key=f'width_{i}')
+            height = st.number_input(f"제품 {i + 1} 높이 (cm)", min_value=1, key=f'height_{i}')
+            per_carton = st.number_input(f"제품 {i + 1} 카톤당 수량", min_value=1, key=f'per_carton_{i}')
+            order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
+            cartons = calculate_cartons(per_carton, order_qty)
+            st.write(f"**총 카톤 수:** {cartons}")
+            products.append((length, width, height, cartons))
 
-products = []
-for i in range(int(num_products)):
-    st.subheader(f"제품 {i + 1} 정보 입력")
-    length = st.number_input(f"제품 {i + 1} 길이 (cm)", min_value=1, key=f'length_{i}')
-    width = st.number_input(f"제품 {i + 1} 너비 (cm)", min_value=1, key=f'width_{i}')
-    height = st.number_input(f"제품 {i + 1} 높이 (cm)", min_value=1, key=f'height_{i}')
-    per_carton = st.number_input(f"제품 {i + 1} 카톤당 수량", min_value=1, key=f'per_carton_{i}')
-    order_qty = st.number_input(f"제품 {i + 1} 발주 수량", min_value=1, key=f'order_qty_{i}')
-    cartons = calculate_cartons(per_carton, order_qty)
-    st.write(f"**총 카톤 수:** {cartons}")
-    products.append((length, width, height, cartons))
+with col2:
+    st.header("컨테이너 정보")
+    container_type = st.selectbox("컨테이너 사이즈 선택", list(CONTAINERS.keys()))
+    container_dim = CONTAINERS[container_type]
+    cbm = (container_dim['length'] / 100) * (container_dim['width'] / 100) * (container_dim['height'] / 100)
+    st.write(f"**컨테이너 타입:** {container_type}")
+    st.write(f"**길이:** {container_dim['length']} cm")
+    st.write(f"**너비:** {container_dim['width']} cm")
+    st.write(f"**높이:** {container_dim['height']} cm")
+    st.write(f"**CBM:** {cbm:.2f} m³")
 
 if st.button("시뮬레이션 시작"):
     st.subheader(f"{container_type} 컨테이너에 제품을 선적하는 시뮬레이션입니다.")
-    draw_container(container_dim, products)
+    draw_container(container_dim, products, container_type)
