@@ -57,12 +57,13 @@ def draw_container(container_dim, boxes):
 
     # 박스 배치 초기 위치
     current_x, current_y, current_z = 0, 0, 0
+    max_z = cz
     colors = ['blue', 'red', 'green', 'orange', 'purple']
     color_idx = 0
 
     for i, (bx, by, bz, qty) in enumerate(boxes):
         for _ in range(qty):
-            # 현재 박스가 컨테이너를 초과하는지 확인
+            # 공간 초과 시 다음 행 또는 층으로 이동
             if current_x + bx > cx:
                 current_x = 0
                 current_y += by
