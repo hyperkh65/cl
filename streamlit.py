@@ -135,10 +135,7 @@ def display_results(packer, container_cbm):
     # 총 선적 정보
     st.subheader("총 선적 정보")
     summary_data = {
-        "최대 선적 가능 박스 수": [sum([math.floor(container_dim['length'] / (item.width)) *
-                                       math.floor(container_dim['width'] / (item.height)) *
-                                       math.floor(container_dim['height'] / (item.depth))
-                                       for bin in packer.bins for item in bin.items])],
+        "최대 선적 가능 박스 수": [calculate_max_boxes(packer, container_dim)],
         "실제 선적된 박스 수": [total_loaded_boxes],
         "사용된 CBM": [f"{total_used_cbm:.4f} m³"],
         "총 CBM": [f"{container_cbm:.2f} m³"],
@@ -146,6 +143,20 @@ def display_results(packer, container_cbm):
     }
     summary_df = pd.DataFrame(summary_data)
     st.table(summary_df)
+
+def calculate_max_boxes(packer, container_dim):
+    # 최대 선적 가능 박스 수 계산
+    # 이는 각 박스가 차지하는 공간에 따라 다르므로 단순 계산이 어려움
+    # 여기서는 단일 제품 기준으로 최대 박스 수를 계산
+    max_boxes = 0
+    for bin in packer.bins:
+        for item in bin.items:
+            lx, ly, lz = item.width, item.height, item.depth
+            boxes_length = container_dim['length'] // lx
+            boxes_width = container_dim['width'] // ly
+            boxes_height = container_dim['height'] // lz
+            max_boxes += boxes_length * boxes_width * boxes_height
+    return max_boxes
 
 def optimize_packing(container_dim, products):
     packer = Packer()
