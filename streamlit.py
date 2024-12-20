@@ -13,39 +13,15 @@ CONTAINERS = {
 def calculate_cartons(per_carton, order_qty):
     return math.ceil(order_qty / per_carton)
 
-def calculate_cbm(length, width, height, quantity):
-    return (length * width * height * quantity) / 1e9  # mm³을 m³으로 변환
-
 def add_box(fig, x0, y0, z0, dx, dy, dz, color, name):
-    # 8개의 꼭짓점 정의
-    vertices = np.array([
-        [x0, y0, z0],
-        [x0 + dx, y0, z0],
-        [x0 + dx, y0 + dy, z0],
-        [x0, y0 + dy, z0],
-        [x0, y0, z0 + dz],
-        [x0 + dx, y0, z0 + dz],
-        [x0 + dx, y0 + dy, z0 + dz],
-        [x0, y0 + dy, z0 + dz]
-    ])
-
-    # 삼각형을 구성하는 인덱스 정의
-    I = [0, 0, 0, 1, 1, 2, 4, 4, 4, 5, 5, 6]
-    J = [1, 3, 4, 2, 3, 3, 5, 6, 7, 6, 7, 7]
-    K = [3, 4, 5, 3, 7, 7, 6, 7, 5, 7, 4, 5]
-
-    # Mesh3d로 박스 추가
+    # 박스를 구성하는 면 추가
     fig.add_trace(go.Mesh3d(
-        x=vertices[:, 0],
-        y=vertices[:, 1],
-        z=vertices[:, 2],
-        i=I,
-        j=J,
-        k=K,
+        x=[x0, x0+dx, x0+dx, x0, x0, x0+dx, x0+dx, x0],
+        y=[y0, y0, y0+dy, y0+dy, y0, y0, y0+dy, y0+dy],
+        z=[z0, z0, z0, z0, z0+dz, z0+dz, z0+dz, z0+dz],
         color=color,
-        opacity=0.6,
-        name=name,
-        showscale=False
+        opacity=0.7,
+        name=name
     ))
 
 def draw_container(container_dim, boxes, container_type):
@@ -53,7 +29,7 @@ def draw_container(container_dim, boxes, container_type):
 
     # 컨테이너 치수 및 CBM 계산
     cx, cy, cz = container_dim['length'], container_dim['width'], container_dim['height']
-    container_cbm = (cx / 1000) * (cy / 1000) * (cz / 1000)  # mm³을 m³으로 변환
+    container_cbm = (cx / 1000) * (cy / 1000) * (cz / 1000)
 
     # 컨테이너 그리기 (투명한 회색 박스)
     add_box(fig, 0, 0, 0, cx, cy, cz, 'lightgrey', 'Container')
