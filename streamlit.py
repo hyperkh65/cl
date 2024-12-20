@@ -50,36 +50,48 @@ def draw_container(container_dim, boxes):
 
     # 컨테이너 치수 및 CBM 계산
     cx, cy, cz = container_dim['length'], container_dim['width'], container_dim['height']
-    cbm = (cx / 100) * (cy / 100) * (cz / 100)  # CBM 계산
+    container_cbm = (cx / 100) * (cy / 100) * (cz / 100)  # CBM 계산
 
     # 컨테이너 그리기 (투명한 회색 박스)
     add_box(fig, 0, 0, 0, cx, cy, cz, 'lightgrey', 'Container')
 
     # 박스 배치 초기 위치
     current_x, current_y, current_z = 0, 0, 0
-    max_z = cz
+    used_cbm = 0
+    total_boxes = 0
     colors = ['blue', 'red', 'green', 'orange', 'purple']
     color_idx = 0
 
     for i, (bx, by, bz, qty) in enumerate(boxes):
         for _ in range(qty):
-            # 공간 초과 시 다음 행 또는 층으로 이동
+            # 공간 초과 시 다음 행으로 이동
             if current_x + bx > cx:
                 current_x = 0
                 current_y += by
+
+            # 공간 초과 시 다음 층으로 이동
             if current_y + by > cy:
                 current_y = 0
                 current_z += bz
+
+            # 공간 초과 시 더 이상 배치 불가
             if current_z + bz > cz:
                 st.warning(f"⚠️ 컨테이너에 더 이상 {i+1}번째 제품을 배치할 공간이 없습니다.")
                 break
 
             # 박스 그리기
             add_box(fig, current_x, current_y, current_z, bx, by, bz, colors[color_idx % len(colors)], f'Product {i+1}')
+            used_cbm += (bx * by * bz) / 1e6  # cm³을 m³으로 변환
+            total_boxes += 1
 
             # 다음 박스의 x 좌표 업데이트
             current_x += bx
+
         color_idx += 1
+
+    # 최대 선적 가능 수량 계산 (단순한 방법)
+    max_boxes = math.floor(cx / min([box[0] for box in boxes])) * math.floor(cy / min([box[1] for box in boxes])) * math.floor(cz / min([box[2] for box in boxes]))
+    max_cbm = (cx * cy * cz) / 1e6  # cm³을 m³으로 변환
 
     # 레이아웃 설정
     fig.update_layout(
@@ -101,12 +113,19 @@ def draw_container(container_dim, boxes):
         yref="paper",
         text=f"컨테이너 타입: {container_type}<br>"
              f"길이: {cx} cm, 너비: {cy} cm, 높이: {cz} cm<br>"
-             f"CBM: {cbm:.2f} m³",
+             f"CBM: {container_cbm:.2f} m³<br>"
+             f"최대 선적 가능 박스 수: {max_boxes}<br>"
+             f"사용된 CBM: {used_cbm:.2f} m³",
         showarrow=False,
         font=dict(size=12)
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+    # 최대 선적 가능 박스 수 및 CBM 정보 표시
+    st.subheader("선적 정보")
+    st.write(f"**최대 선적 가능 박스 수:** {max_boxes}")
+    st.write(f"**사용된 CBM:** {used_cbm:.2f} m³ / **총 CBM:** {container_cbm:.2f} m³")
 
 # Streamlit UI
 st.title("혼적 컨테이너 선적 시뮬레이션 (고급 3D)")
@@ -128,7 +147,7 @@ st.sidebar.write(f"**CBM:** {cbm:.2f} m³")
 num_products = st.number_input("선적할 제품 종류 수", min_value=1, max_value=5, step=1)
 
 products = []
-for i in range(num_products):
+for i in range(int(num_products)):
     st.subheader(f"제품 {i + 1} 정보 입력")
     length = st.number_input(f"제품 {i + 1} 길이 (cm)", min_value=1, key=f'length_{i}')
     width = st.number_input(f"제품 {i + 1} 너비 (cm)", min_value=1, key=f'width_{i}')
